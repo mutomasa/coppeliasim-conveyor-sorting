@@ -6,7 +6,7 @@
 
 CoppeliaSim 上でベルトコンベアを動かし、流れてくる赤い箱と青い箱を UR5 ロボットアームが吸着して、色ごとのレーンへ振り分けます。箱の生成、搬送、センサーによる検出、ロボットの動作、仕分けの判定、結果の評価までを Python（ZeroMQ Remote API）で自動化します。
 
-> **現在の状況**：設計書（[`docs/design.md`](docs/design.md)）を公開した段階です。シーンファイルとソースコードは、授業の進行に合わせて順に追加します。
+> **現在の状況**：Step 1〜8 の基本機能（Stop-and-Pick 方式の連続自動運転と Vision Sensor による色判定）を実装済みです。設計は [`docs/design.md`](docs/design.md) を参照してください。
 
 ---
 
@@ -54,17 +54,62 @@ flowchart LR
 | コンベア | Generic conveyor (belt) |
 | センサー | Proximity Sensor、Vision Sensor（Step 8） |
 | 逆運動学 | simIK |
-| 画像処理 | OpenCV（Step 8 で使用） |
+| 画像処理 | NumPy による HSV 色判定（Step 8。OpenCV に置き換え可） |
 
-### セットアップ
+## セットアップと実行
+
+CoppeliaSim は**自分の PC（ホスト）**で動かし、Python は **Docker コンテナ**の中で動かします。両者は ZeroMQ Remote API（ポート 23000）で通信します。シーンはスクリプトが毎回自動で組み立てるので、`.ttt` ファイルは配布していません。
+
+| OS | 必要なもの |
+|---|---|
+| Ubuntu 22.04 / 24.04（x86-64） | Docker Engine + Compose プラグイン |
+| Windows 11（x86-64） | Docker Desktop（WSL 2、Linux コンテナ）→ 先に [`docs/windows.md`](docs/windows.md) を読む |
+| macOS（Intel / Apple Silicon） | プロセッサに合った Docker Desktop |
+
+共通：**CoppeliaSim 4.10**、Git、Docker Compose v2
+
+### 1. 取得とビルド
 
 ```bash
-pip install coppeliasim-zmqremoteapi-client
-# Step 8（画像による色認識）で使用
-pip install opencv-python numpy
+git clone <このリポジトリの URL>
+cd coppeliasim-conveyor-sorting
+docker compose build
 ```
 
-CoppeliaSim を起動してシーンを開いた状態で、Python スクリプトを実行します。ZeroMQ Remote API のアドオンは CoppeliaSim の起動時に自動で読み込まれます。
+Docker を起動してからビルドしてください。初回は依存パッケージのダウンロードに数分かかります。
+
+### 2. CoppeliaSim を起動する
+
+CoppeliaSim を起動し、**空のシーンのまま、シミュレーションを停止した状態**にしておきます。ZeroMQ Remote API のアドオンは起動時に自動で読み込まれます。
+
+### 3. 接続を確認して実行する
+
+```bash
+docker compose run --rm lab python src/check_connection.py   # 接続確認
+docker compose run --rm lab python src/main.py               # 12個を連続で仕分ける
+docker compose run --rm lab python src/main.py --boxes 20 --classifier label
+docker compose run --rm lab python src/scene_builder.py      # シーンを組み立てるだけ（画面で確認用）
+```
+
+スクリプトがシーンの組み立て、シミュレーションの開始・ステップ実行・停止まで行います。結果は `results/sorting_<日時>.csv` に保存され、成功率・サイクルタイム・処理能力・手先位置誤差が表示されます。パラメータは `config.yaml` で変更できます。
+
+### VS Code（任意）
+
+Dev Containers 拡張機能を入れ、「Dev Containers: Reopen in Container」を選ぶと、コンテナの中で編集・実行できます。CoppeliaSim はホスト側で動かしたままにします。
+
+### Docker を使わない場合
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python src/main.py
+```
+
+### うまくいかないとき
+
+- CoppeliaSim が起動しているか、ファイアウォールでポート 23000 が許可されているか確認する。
+- Docker 内からは `localhost` ではなく `host.docker.internal` に接続する（`docker-compose.yml` で `COPPELIASIM_HOST` に設定済み。Ubuntu 用の host-gateway の設定も入っています）。
+- 前の実行が残っている場合は、CoppeliaSim でシミュレーションを停止してから実行し直す。
 
 ## 8つのステップ
 
@@ -95,27 +140,32 @@ Python からは次の Alias でオブジェクトを参照します。シーン
 | `ikTarget` | IK の目標位置（Dummy） |
 | `attachPoint` | 吸着した箱を取り付ける点 |
 
-## 予定しているディレクトリ構成
+## ディレクトリ構成
 
 ```text
 coppeliasim-conveyor-sorting/
 ├── docs/
-│   └── design.md            # 設計書（公開済み）
-├── scenes/
-│   └── conveyor_sorting.ttt # CoppeliaSim シーン
+│   ├── design.md            # 設計書
+│   └── windows.md           # Windows 11 のセットアップ手順
+├── docker/Dockerfile        # Python 実行環境
+├── docker-compose.yml       # lab サービス（ホストの CoppeliaSim に接続）
+├── .devcontainer/           # VS Code Dev Container 設定
 ├── src/
-│   ├── main.py              # シミュレーションの起動、状態遷移、全体の実行
+│   ├── main.py              # シーン構築、状態遷移、全体の実行
+│   ├── scene_builder.py     # コンベア・センサー・UR5・受け皿をシーンに配置
+│   ├── check_connection.py  # 接続確認
 │   ├── simulation.py        # Remote API 接続、sim.step、終了処理
 │   ├── conveyor.py          # ベルトの速度・停止・再開
-│   ├── box_spawner.py       # 赤・青の箱のランダム生成と出現位置
-│   ├── detector.py          # センサーの読み取り、対象の箱の取得
-│   ├── robot_controller.py  # UR5・IK・補間軌道・Home 復帰
-│   ├── gripper.py           # Attach / Release
-│   ├── sorter.py            # 色の判定、置き場所の選択
-│   └── logger.py            # 結果の CSV 出力、成功率、処理時間
-├── tests/
+│   ├── box_spawner.py       # 赤・青の箱のランダム生成
+│   ├── detector.py          # Proximity Sensor の読み取り
+│   ├── robot_controller.py  # UR5・simIK・補間軌道
+│   ├── gripper.py           # Attach / Release（簡易吸着）
+│   ├── sorter.py            # 色の判定（Alias / Vision Sensor）、置き場所の選択
+│   └── logger.py            # 結果の CSV 出力と評価指標
+├── results/                 # 実行結果の CSV（ホスト側に保存）
 ├── config.yaml              # 速度・サイズ・座標などのパラメータ
-├── pyproject.toml
+├── requirements.txt
+├── LICENSE                  # MIT
 └── README.md
 ```
 
@@ -153,3 +203,7 @@ coppeliasim-conveyor-sorting/
 - [CoppeliaSim 公式フォーラム](https://forum.coppeliarobotics.com/)
 - [Robotic Pick and Place Simulation Using CoppeliaSim（Instructables）](https://www.instructables.com/Robotic-Pick-and-Place-Simulation-Using-CoppeliaSi/)
 - [CoppeliaSim-RobotArm-PickAndPlace（GitHub）](https://github.com/sunday-ikechukwu/CoppeliaSim-RobotArm-PickAndPlace)
+
+## ライセンス
+
+コードは [MIT License](LICENSE) です。CoppeliaSim 本体とモデル（UR5、Generic conveyor など）は Coppelia Robotics のライセンスに従います。
