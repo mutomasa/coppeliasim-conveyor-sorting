@@ -1,0 +1,33 @@
+# CoppeliaSim conveyor color-sorting demo parameters
+simulation:
+  host: localhost          # Docker 内では環境変数 COPPELIASIM_HOST が優先される
+  port: 23000
+  total_boxes: 12          # 連続処理する箱の数（Step 7 の完了条件は10個以上）
+  max_sim_time: 600.0      # 安全のための上限 [s]
+  seed: 42
+
+conveyor:
+  speed: 0.08              # 搬送速度 [m/s]
+
+box:
+  size: [0.06, 0.06, 0.04]
+  mass: 0.1
+  spawn_pos: [-0.42, 0.0, 0.73]   # ベルト上面(z≈0.70) + 箱の高さ/2 + 隙間
+  spawn_interval: 6.0             # 生成間隔 [s]（シミュレーション時間）
+  colors:
+    red: [1.0, 0.1, 0.1]
+    blue: [0.1, 0.2, 1.0]
+
+robot:
+  home: [0.25, -0.15, 0.95]       # 待機位置（ワールド座標）
+  approach_height: 0.12           # 箱の真上で待つ高さ（箱上面からの距離）
+  place_height: 0.03              # 解放する高さ（受け皿上面から箱底面まで）
+  speed: 0.6                      # 手先の直線移動速度 [m/s]
+  settle_steps: 10                # 解放後に待つステップ数
+
+classifier:
+  method: vision                  # label: Alias で判定 / vision: Vision Sensor 画像で判定
+
+trays:
+  grid: [3, 4]                    # 受け皿上の配置グリッド（行, 列）
+  pitch: 0.075                    # 配置間隔 [m]

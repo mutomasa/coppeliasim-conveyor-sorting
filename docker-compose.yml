@@ -1,0 +1,17 @@
+services:
+  lab:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: coppeliasim-conveyor-sorting:latest
+    working_dir: /work
+    volumes:
+      - .:/work            # results/ の CSV はホスト側に保存される
+    environment:
+      COPPELIASIM_HOST: host.docker.internal
+      COPPELIASIM_PORT: "23000"
+      TZ: ${TZ:-Asia/Tokyo}   # 結果ファイル名の時刻をホストに合わせる
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # Linux で host.docker.internal を使うため
+    stdin_open: true
+    tty: true

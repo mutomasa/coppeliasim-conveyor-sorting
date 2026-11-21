@@ -1,0 +1,12 @@
+{
+  "name": "coppeliasim-conveyor-sorting",
+  "dockerComposeFile": ["../docker-compose.yml"],
+  "service": "lab",
+  "workspaceFolder": "/work",
+  "overrideCommand": true,
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python", "charliermarsh.ruff"]
+    }
+  }
+}
